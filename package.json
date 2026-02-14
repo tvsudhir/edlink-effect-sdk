@@ -1,0 +1,35 @@
+{
+	"name": "edlink-effect-sdk",
+	"version": "1.0.0",
+	"description": "Effect library for edlink",
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"type": "module",
+	"files": [
+		"dist"
+	],
+	"scripts": {
+		"build": "tsc",
+		"prepublishOnly": "npm run build",
+		"dev": "tsx src/index.ts"
+	},
+	"keywords": [
+		"edlink",
+		"effect"
+	],
+	"author": "Sudheer Tirumalasetty",
+	"license": "MIT",
+	"publishConfig": {
+		"access": "public"
+	},
+	"dependencies": {
+		"@effect/platform": "^0.87.7",
+		"@effect/platform-node": "^0.88.11",
+		"effect": "^3.19.13"
+	},
+	"devDependencies": {
+		"dotenv": "^17.3.1",
+		"tsx": "^4.21.0",
+		"typescript": "^5.0.0"
+	}
+}
