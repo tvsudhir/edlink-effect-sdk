@@ -3,6 +3,7 @@ import { HttpClient, HttpClientRequest } from '@effect/platform';
 import { EdlinkConfig as EdlinkConfigService } from './config-service.js';
 import type { EdlinkEvent, EdlinkPerson, EdlinkPaginatedResponse } from '../types/edlink.js';
 import type { PaginationConfig } from '../types/pagination.js';
+import { selectStrategy } from '../strategies/pagination/index.js';
 
 /**
  * Edlink API Client service
@@ -99,6 +100,9 @@ const makeEdlinkClient: Effect.Effect<
     path: string,
     paginationConfig: PaginationConfig = defaultPaginationConfig
   ): Stream.Stream<T, Error> => {
+    // Select the appropriate pagination strategy for this config
+    const strategy = selectStrategy(paginationConfig);
+
     return Stream.unfoldEffect(
       {
         nextUrl: `${edlinkConfig.apiBaseUrl}/v2/graph${path}`,
@@ -112,90 +116,56 @@ const makeEdlinkClient: Effect.Effect<
             return Option.none();
           }
 
-          // Check pagination limits before fetching
-          if (
-            paginationConfig.type === 'pages' &&
-            state.pageCount >= paginationConfig.maxPages
-          ) {
+          // Check pagination limits using the strategy
+          if (!strategy.shouldContinue(state, paginationConfig)) {
             return Option.none();
           }
 
-          if (
-            paginationConfig.type === 'records' &&
-            state.recordCount >= paginationConfig.maxRecords
-          ) {
+          // Fetch current page from Edlink API
+          const req = HttpClientRequest.get(state.nextUrl).pipe(
+            HttpClientRequest.bearerToken(clientSecret)
+          );
+
+          // Errors naturally propagate through yield* - no Effect.try needed
+          const response = yield* httpClient.execute(req);
+          const pageDataUntyped = yield* response.json;
+          const pageData = pageDataUntyped as EdlinkPaginatedResponse<T>;
+
+          // Extract items from this page
+          const items = pageData.$data || [];
+          const nextCursor = pageData.$next;
+
+          if (!items || items.length === 0) {
             return Option.none();
           }
 
-          try {
-            // Fetch current page from Edlink API
-            const req = HttpClientRequest.get(state.nextUrl).pipe(
-              HttpClientRequest.bearerToken(clientSecret)
-            );
+          // Use strategy to calculate which items to emit
+          const itemsToEmit = strategy.calculateItemsToEmit(
+            items,
+            state,
+            paginationConfig
+          ) as T[];
+          const newRecordCount = state.recordCount + itemsToEmit.length;
 
-            const response = yield* httpClient.execute(req);
-            const pageDataUntyped = yield* response.json;
-            const pageData = pageDataUntyped as EdlinkPaginatedResponse<T>;
+          // Determine next URL using strategy
+          const nextUrl = strategy.getNextUrl(nextCursor, newRecordCount, paginationConfig);
 
-            // Extract items from this page
-            const items = pageData.$data || [];
-            const nextCursor = pageData.$next;
-
-            if (!items || items.length === 0) {
-              return Option.none();
-            }
-
-            // Calculate how many records to emit from this page
-            let itemsToEmit = items;
-            let newRecordCount = state.recordCount + items.length;
-
-            if (
-              paginationConfig.type === 'records' &&
-              newRecordCount > paginationConfig.maxRecords
-            ) {
-              const itemsAllowed =
-                paginationConfig.maxRecords - state.recordCount;
-              itemsToEmit = items.slice(0, itemsAllowed);
-              newRecordCount = paginationConfig.maxRecords;
-            }
-
-            // Check if there's a next page to fetch
-            const hasNextPage =
-              nextCursor != null &&
-              (paginationConfig.type !== 'pages' ||
-                state.pageCount + 1 < paginationConfig.maxPages) &&
-              (paginationConfig.type !== 'records' ||
-                newRecordCount < paginationConfig.maxRecords);
-
-            // Return current items with next state if there are more pages
-            if (hasNextPage) {
-              const nextState = {
-                nextUrl: nextCursor,
-                pageCount: state.pageCount + 1,
-                recordCount: newRecordCount,
-              };
-              // Emit items and continue with nextState
-              return Option.some([itemsToEmit, nextState] as const);
-            } else {
-              // Last page - emit items and set nextUrl to falsy so next iteration stops
-              const lastState = {
-                nextUrl: '',
-                pageCount: state.pageCount + 1,
-                recordCount: newRecordCount,
-              };
-              return Option.some([itemsToEmit, lastState] as const);
-            }
-          } catch (error) {
-            throw new Error(
-              `Failed to fetch from ${state.nextUrl}: ${error instanceof Error ? error.message : String(error)}`
-            );
-          }
+          // Update state and return items with next URL
+          const nextState = strategy.updateState(state, items.length, paginationConfig);
+          return Option.some([
+            itemsToEmit,
+            { ...nextState, nextUrl },
+          ] as const);
         })
     ).pipe(
-      // Flatten the array of items into individual stream emissions,
-      // and map errors from HttpClientError to Error
+      // Flatten the array of items into individual stream emissions
       Stream.flatMap((items) => Stream.fromIterable(items)),
-      Stream.mapError(() => new Error('Failed to fetch from Edlink API'))
+      // Map any errors to standardized Error type
+      Stream.mapError((error) => 
+        new Error(
+          `Failed to fetch from Edlink API: ${error instanceof Error ? error.message : String(error)}`
+        )
+      )
     );
   };
 

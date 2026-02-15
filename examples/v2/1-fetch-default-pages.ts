@@ -24,32 +24,27 @@ export default Effect.gen(function* () {
 
   const edlinkClient = yield* EdlinkClient;
 
-  try {
-    // Get stream of events (default: max 3 pages)
-    const eventsStream = edlinkClient.getEventsStream();
+  // Get stream of events (default: max 3 pages)
+  const eventsStream = edlinkClient.getEventsStream();
 
-    // Collect events from the stream into a chunk (bounded to avoid hangs during debugging)
-    const eventsChunk = yield* Stream.runCollect(eventsStream.pipe(Stream.take(500)));
-    const events = Chunk.toArray(eventsChunk);
+  // Collect events from the stream into a chunk (bounded to avoid hangs during debugging)
+  const eventsChunk = yield* Stream.runCollect(eventsStream.pipe(Stream.take(500)));
+  const events = Chunk.toArray(eventsChunk);
 
-    const summary = {
-      totalCount: events.length,
-      firstEvent: events.length > 0 ? events[0] : null,
-    };
-    yield* Effect.logInfo('✅ Events fetched with default pagination (3 pages max):', summary);
-    // Always print a JSON summary to the console for easy visibility
-    // eslint-disable-next-line no-console
-    console.log(JSON.stringify(summary, null, 2));
+  const summary = {
+    totalCount: events.length,
+    firstEvent: events.length > 0 ? events[0] : null,
+  };
+  yield* Effect.logInfo('✅ Events fetched with default pagination (3 pages max):', summary);
+  // Always print a JSON summary to the console for easy visibility
+  // eslint-disable-next-line no-console
+  console.log(JSON.stringify(summary, null, 2));
 
-    if (events.length > 0) {
-      yield* Effect.logInfo('📌 Sample events:');
-      events.slice(0, 3).forEach((event, idx) => {
-        console.log(`  ${idx + 1}. ID: ${event.id}, Type: ${event.type}`);
-      });
-    }
-  } catch (error) {
-    yield* Effect.logError('Failed to fetch events:', error);
-    throw error;
+  if (events.length > 0) {
+    yield* Effect.logInfo('📌 Sample events:');
+    events.slice(0, 3).forEach((event, idx) => {
+      console.log(`  ${idx + 1}. ID: ${event.id}, Type: ${event.type}`);
+    });
   }
 }).pipe(
   // Provide the required service layers

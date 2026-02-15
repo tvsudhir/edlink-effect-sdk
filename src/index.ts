@@ -1,30 +1,9 @@
-import { Effect, Config } from 'effect';
+// Load .env.local before any Effect-TS code runs
+import './env-loader.js';
+
+import { Effect } from 'effect';
 import { NodeRuntime } from '@effect/platform-node';
 import { EdlinkConfig } from './services/config-service.js';
-import * as fs from 'fs';
-import * as path from 'path';
-
-// Load .env.local before any Effect-TS code runs
-try {
-  const envPath = path.join(process.cwd(), '.env.local');
-  if (fs.existsSync(envPath)) {
-    const content = fs.readFileSync(envPath, 'utf-8');
-    const lines = content.split('\n');
-    for (const line of lines) {
-      if (line.trim() && !line.startsWith('#')) {
-        const [key, ...valueParts] = line.split('=');
-        if (key) {
-          const value = valueParts.join('=').trim();
-          // Remove quotes if present
-          const cleanValue = value.replace(/^["']|["']$/g, '');
-          process.env[key.trim()] = cleanValue;
-        }
-      }
-    }
-  }
-} catch {
-  // Silently ignore if we can't load .env.local
-}
 
 // Static imports for examples (no dynamic imports)
 import example1 from '../examples/v2/1-fetch-default-pages';
@@ -54,41 +33,31 @@ import example8 from '../examples/v2/8-compare-strategies';
  */
 
 /**
- * Dynamically load an example module
+ * Map of example numbers to their modules
+ * Simple direct lookup instead of switch statement
  */
-async function loadExampleModule(exampleNumber: number) {
-  const exampleNames = [
-    '1-fetch-default-pages',
-    '2-fetch-all-data',
-    '3-fetch-max-records',
-    '4-process-sequentially',
-    '5-take-first-n-items',
-    '6-fetch-people',
-    '7-merge-streams',
-    '8-compare-strategies',
-  ];
+const examplesMap: Record<number, any> = {
+  1: example1,
+  2: example2,
+  3: example3,
+  4: example4,
+  5: example5,
+  6: example6,
+  7: example7,
+  8: example8,
+};
 
-  const exampleName = exampleNames[exampleNumber - 1];
-  if (!exampleName) {
-    throw new Error(
-      `Invalid example number: ${exampleNumber}. Choose 1-8.`
-    );
-  }
-  const examples: any[] = [
-    example1,
-    example2,
-    example3,
-    example4,
-    example5,
-    example6,
-    example7,
-    example8,
-  ];
-
-  const mod = examples[exampleNumber - 1];
-  if (!mod) throw new Error(`Example module not found for ${exampleName}`);
-  return mod as Effect.Effect<void>;
-}
+/**
+ * Lookup and return the requested example module
+ * Uses Effect pattern to handle invalid example numbers as failures
+ */
+const loadExampleModule = Effect.fn((exampleNumber: number) =>
+  examplesMap[exampleNumber]
+    ? Effect.succeed(examplesMap[exampleNumber])
+    : Effect.fail(
+        new Error(`Invalid example number: ${exampleNumber}. Choose 1-8.`)
+      )
+);
 
 /**
  * Main entry point - loads and runs the selected example
@@ -98,35 +67,17 @@ const main = Effect.gen(function* () {
   // Read example number from typed, validated configuration
   const config = yield* EdlinkConfig;
   const exampleNumber = config.exampleNumber;
-  
+
   yield* Effect.logInfo('🎯 Edlink Effect SDK - Examples');
   yield* Effect.logInfo(`📌 Running Example ${exampleNumber}`);
   yield* Effect.logInfo('---');
 
-  try {
-    // Load the example module dynamically
-    const exampleEffect = yield* Effect.tryPromise({
-      try: () => loadExampleModule(exampleNumber),
-      catch: (error) => new Error(`Failed to load example: ${error}`),
-    });
-
-    // Run the example effect
-    yield* exampleEffect;
-  } catch (error) {
-    yield* Effect.logError('Error running example:', error);
-    throw error;
-  }
-}).pipe(
-  Effect.catchAll((error) =>
-    Effect.logError(`Fatal error: ${error}`).pipe(Effect.andThen(() =>
-      Effect.fail(error)
-    ))
-  ),
-  // Provide the configuration layer so dependencies are satisfied
-  Effect.provide(EdlinkConfig.Live)
-);
+  // Load the example module and run it
+  const exampleEffect = yield* loadExampleModule(exampleNumber);
+  yield* (exampleEffect as any);
+});
 
 /**
  * Runtime entry point - runs the main effect
  */
-NodeRuntime.runMain(main);
+NodeRuntime.runMain(main.pipe(Effect.provide(EdlinkConfig.Live)) as Effect.Effect<void, never, never>);

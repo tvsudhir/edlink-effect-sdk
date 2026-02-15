@@ -1,31 +1,36 @@
 /**
  * Configuration options for paginating through Edlink API results
+ * 
+ * This module defines and re-exports pagination types and strategies from their dedicated submodules:
+ * - pages.ts: PaginateByPages type + byPagesStrategy
+ * - records.ts: PaginateByRecords type + byRecordsStrategy
+ * - all.ts: PaginateAll type + allStrategy
  */
 
-/**
- * Limit pagination to a specific number of pages
- */
-export interface PaginateByPages {
-  type: 'pages';
-  /** Maximum number of pages to fetch */
-  maxPages: number;
-}
+export { 
+  type PaginateByPages,
+  isPaginateByPages,
+  byPagesStrategy,
+} from './pagination/pages.js';
+
+export { 
+  type PaginateByRecords,
+  isPaginateByRecords,
+  byRecordsStrategy,
+} from './pagination/records.js';
+
+export { 
+  type PaginateAll,
+  isPaginateAll,
+  allStrategy,
+} from './pagination/all.js';
 
 /**
- * Limit pagination to a specific number of records
+ * Re-import types for the union definition below
  */
-export interface PaginateByRecords {
-  type: 'records';
-  /** Maximum number of records to fetch */
-  maxRecords: number;
-}
-
-/**
- * Fetch all available records (no limit)
- */
-export interface PaginateAll {
-  type: 'all';
-}
+import type { PaginateByPages } from './pagination/pages.js';
+import type { PaginateByRecords } from './pagination/records.js';
+import type { PaginateAll } from './pagination/all.js';
 
 /**
  * Pagination configuration for Stream operations
@@ -42,4 +47,7 @@ export interface PaginateAll {
  * // Fetch all available records
  * const config: PaginationConfig = { type: 'all' };
  */
-export type PaginationConfig = PaginateByPages | PaginateByRecords | PaginateAll;
+export type PaginationConfig = 
+  | PaginateByPages
+  | PaginateByRecords
+  | PaginateAll;
