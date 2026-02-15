@@ -1,7 +1,6 @@
 import { Effect, Stream, Chunk } from 'effect';
 import { FetchHttpClient } from '@effect/platform';
-import { loadEdlinkConfig } from '../../src/config.js';
-import { makeEdlinkClientLayer, EdlinkClient } from '../../src/services/edlink-client.js';
+import { EdlinkClient, EdlinkClientLive } from '../../src/services/edlink-client.js';
 
 /**
  * Example 2: Fetch ALL Available Events (No Limit)
@@ -19,37 +18,31 @@ export default Effect.gen(function* () {
   yield* Effect.logInfo('📖 Example 2: Fetch ALL Available Events');
   yield* Effect.logInfo('⚠️  This may take time if there are many events...');
 
-  const edlinkConfig = yield* loadEdlinkConfig();
-  const httpClientLayer = FetchHttpClient.layer;
-  const edlinkClientLayer = makeEdlinkClientLayer(edlinkConfig);
+  const edlinkClient = yield* EdlinkClient;
 
-  yield* Effect.gen(function* () {
-    const edlinkClient = yield* EdlinkClient;
+  // Get stream of events with no limit
+  const eventsStream = edlinkClient.getEventsStream({ type: 'all' });
 
-    // Get stream of events with no limit
-    const eventsStream = edlinkClient.getEventsStream({ type: 'all' });
+  // Collect all events and convert to array
+  const eventsChunk = yield* Stream.runCollect(eventsStream);
+  const events = Chunk.toArray(eventsChunk);
 
-    // Collect all events and convert to array
-    const eventsChunk = yield* Stream.runCollect(eventsStream);
-    const events = Chunk.toArray(eventsChunk);
+  const summary = {
+    totalCount: events.length,
+    strategy: 'Fetch everything',
+    memoryNote: 'All pages loaded into memory',
+  };
+  yield* Effect.logInfo('✅ All available events fetched:', summary);
+  // eslint-disable-next-line no-console
+  console.log(JSON.stringify(summary, null, 2));
 
-    const summary = {
-      totalCount: events.length,
-      strategy: 'Fetch everything',
-      memoryNote: 'All pages loaded into memory',
-    };
-    yield* Effect.logInfo('✅ All available events fetched:', summary);
-    // eslint-disable-next-line no-console
-    console.log(JSON.stringify(summary, null, 2));
-
-    if (events.length > 0) {
-      yield* Effect.logInfo('📌 Sample events (first 3):');
-      events.slice(0, 3).forEach((event, idx) => {
-        console.log(`  ${idx + 1}. ID: ${event.id}, Type: ${event.type}`);
-      });
-    }
-  }).pipe(
-    Effect.provide(edlinkClientLayer),
-    Effect.provide(httpClientLayer)
-  );
-});
+  if (events.length > 0) {
+    yield* Effect.logInfo('📌 Sample events (first 3):');
+    events.slice(0, 3).forEach((event, idx) => {
+      console.log(`  ${idx + 1}. ID: ${event.id}, Type: ${event.type}`);
+    });
+  }
+}).pipe(
+  Effect.provide(EdlinkClientLive),
+  Effect.provide(FetchHttpClient.layer),
+);

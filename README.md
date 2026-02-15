@@ -44,36 +44,107 @@ pnpm build
 pnpm dev
 ```
 
+## � Configuration (Effect-TS Pattern)
+
+This SDK uses **Effect-TS** best practices for configuration management. Secrets are never accessed directly via `process.env` and are always type-safe and validated.
+
+### Environment Variables
+
+Configuration is loaded via Effect's **Config** system, which provides:
+- ✅ Type-safe environment variable parsing
+- ✅ Automatic validation and defaults
+- ✅ Secret redaction in logs (prevents accidental exposure)
+- ✅ Support for multiple environments (.env.local, .env.staging, etc.)
+- ✅ Zero direct `process.env` access in the codebase
+
+### Setup
+
+1. **Copy the template:**
+   ```bash
+   cp .env.example .env.local
+   ```
+
+2. **Fill in your credentials:**
+   ```bash
+   # Edit .env.local
+   EDLINK_CLIENT_ID=your_id
+   EDLINK_CLIENT_SECRET=your_secret
+   ```
+
+3. **Never commit .env.local** - it's already in `.gitignore`
+
+### Required Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `EDLINK_CLIENT_ID` | Your Edlink API client ID | `abc123def456` |
+| `EDLINK_CLIENT_SECRET` | Your Edlink API client secret (redacted in logs) | `secret_xyz789` |
+
+### Optional Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `EDLINK_API_BASE_URL` | `https://ed.link/api` | Edlink API endpoint |
+| `EDLINK_DEFAULT_MAX_PAGES` | `3` | Default page limit for fetches |
+| `EXAMPLE` | `1` | Which example to run (1-8) |
+
+### Environment-Specific Configs
+
+For different environments, create additional `.env` files:
+
+```bash
+# Local development (gitignored)
+.env.local
+
+# Staging environment
+.env.staging
+
+# Production environment
+.env.production
+```
+
+The Config system automatically uses the available environment files.
+
+---
+
 ## 🚀 Quick Start
 
-### Basic Usage - Fetch Events (Default 3 Pages)
+### Modern Approach (Using Effect Context Injection)
 
 ```typescript
 import { Effect, Stream, Chunk } from 'effect';
 import { FetchHttpClient } from '@effect/platform';
-import { loadEdlinkConfig } from './src/config';
-import { makeEdlinkClientLayer, EdlinkClient } from './src/services/edlink-client';
+import { EdlinkClient, EdlinkClientLive } from './src/services/edlink-client';
 
+/**
+ * No manual config loading needed!
+ * Dependencies are injected via Effect's Context system
+ */
 const example = Effect.gen(function* () {
-  const edlinkConfig = yield* loadEdlinkConfig();
-  const httpClientLayer = FetchHttpClient.layer;
-  const edlinkClientLayer = makeEdlinkClientLayer(edlinkConfig);
-
-  yield* Effect.gen(function* () {
-    const client = yield* EdlinkClient;
-    
-    // Fetch events (default: max 3 pages)
-    const eventsStream = client.getEventsStream();
-    const eventsChunk = yield* Stream.runCollect(eventsStream);
-    const events = Chunk.toArray(eventsChunk);
-    
-    yield* Effect.logInfo(`Fetched ${events.length} events`);
-  }).pipe(
-    Effect.provide(edlinkClientLayer),
-    Effect.provide(httpClientLayer)
-  );
-});
+  // EdlinkConfig is automatically loaded and validated
+  const client = yield* EdlinkClient;
+  
+  // Fetch events (default: max 3 pages)
+  const eventsStream = client.getEventsStream();
+  const eventsChunk = yield* Stream.runCollect(eventsStream);
+  const events = Chunk.toArray(eventsChunk);
+  
+  yield* Effect.logInfo(`Fetched ${events.length} events`);
+}).pipe(
+  Effect.provide(EdlinkClientLive),
+  Effect.provide(FetchHttpClient.layer),
+);
 ```
+
+### Key Benefits
+
+1. **No process.env** - Configuration is managed by Effect's type-safe system
+2. **Automatic Secret Redaction** - `EDLINK_CLIENT_SECRET` is wrapped in `Secret` type and redacted in logs
+3. **Testability** - Easy to inject different configurations for testing without mocking `process.env`
+4. **Type Safety** - All configuration is validated at startup via Effect's Config system
+5. **Dependency Injection** - Services depend on `EdlinkConfig` context tag, not loose parameters
+
+---
 
 ## 📚 Examples
 
