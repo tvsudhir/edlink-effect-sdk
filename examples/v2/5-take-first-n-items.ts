@@ -16,7 +16,7 @@ import { EdlinkClient, EdlinkClientLive } from '../../src/services/edlink-client
  */
 export default Effect.gen(function* () {
   yield* Effect.logInfo('📖 Example 5: Take First 5 Events (Sampling)');
-  yield* Effect.logInfo('💡 Even requesting "all" data, we only take first 5 items');
+  yield* Effect.log('💡 Even requesting "all" data, we only take first 5 items');
 
   const edlinkClient = yield* EdlinkClient;
 
@@ -28,22 +28,13 @@ export default Effect.gen(function* () {
   const eventsChunk = yield* Stream.runCollect(eventsStream);
   const events = Chunk.toArray(eventsChunk);
 
-  const summary = {
-    requested: 'all',
-    actualCount: events.length,
-    strategy: 'Take first N, stop early',
-    memoryNote: 'Stream stops fetching after 5 items',
-    note: 'Remaining pages are never fetched (efficient)',
-  };
-  yield* Effect.logInfo('✅ First 5 events taken:', summary);
-  // eslint-disable-next-line no-console
-  console.log(JSON.stringify(summary, null, 2));
+  yield* Effect.log(`Took ${events.length} events (stream stopped fetching after 5)`);
 
   if (events.length > 0) {
-    yield* Effect.logInfo('📌 Sampled events:');
-    events.forEach((event, idx) => {
-      console.log(`  ${idx + 1}. ID: ${event.id}, Type: ${event.type}`);
-    });
+    yield* Effect.log('Sampled events:');
+    yield* Effect.forEach(events, (event, idx) =>
+      Effect.log(`  ${idx + 1}. ID: ${event.id}, Type: ${event.type}`)
+    );
   }
 }).pipe(
   Effect.provide(EdlinkClientLive),

@@ -25,25 +25,16 @@ export default Effect.gen(function* () {
     maxRecords: 50,
   });
 
-  // Collect all events and convert to array
   const eventsChunk = yield* Stream.runCollect(eventsStream);
   const events = Chunk.toArray(eventsChunk);
 
-  const summary = {
-    maxRequested: 50,
-    actualCount: events.length,
-    strategy: 'Stop after N records',
-    memoryNote: 'Memory usage bounded by record limit',
-  };
-  yield* Effect.logInfo('✅ Events with record limit:', summary);
-  // eslint-disable-next-line no-console
-  console.log(JSON.stringify(summary, null, 2));
+  yield* Effect.log(`Fetched ${events.length} events (max 50 records, memory bounded)`);
 
   if (events.length > 0) {
-    yield* Effect.logInfo('📌 Sample events (first 3):');
-    events.slice(0, 3).forEach((event, idx) => {
-      console.log(`  ${idx + 1}. ID: ${event.id}, Type: ${event.type}`);
-    });
+    yield* Effect.log('Sample events (first 3):');
+    yield* Effect.forEach(events.slice(0, 3), (event, idx) =>
+      Effect.log(`  ${idx + 1}. ID: ${event.id}, Type: ${event.type}`)
+    );
   }
 }).pipe(
   Effect.provide(EdlinkClientLive),

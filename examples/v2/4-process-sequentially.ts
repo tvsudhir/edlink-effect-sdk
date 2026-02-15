@@ -1,4 +1,4 @@
-import { Effect, Stream } from 'effect';
+import { Effect, Stream, Ref } from 'effect';
 import { FetchHttpClient } from '@effect/platform';
 import { EdlinkClient, EdlinkClientLive } from '../../src/services/edlink-client.js';
 
@@ -17,42 +17,32 @@ import { EdlinkClient, EdlinkClientLive } from '../../src/services/edlink-client
  */
 export default Effect.gen(function* () {
   yield* Effect.logInfo('📖 Example 4: Process Events Sequentially (Memory-Efficient)');
-  yield* Effect.logInfo('💡 This strategy processes items one-by-one without loading all into memory');
+  yield* Effect.log('💡 This strategy processes items one-by-one without loading all into memory');
 
   const edlinkClient = yield* EdlinkClient;
-
   const eventsStream = edlinkClient.getEventsStream();
 
-  // Process each event as it comes (doesn't load all into memory)
-  let eventCount = 0;
-  const processedIds: string[] = [];
+  // Use Refs for effectful mutable state instead of `let` / `.push()`
+  const countRef = yield* Ref.make(0);
+  const idsRef = yield* Ref.make<readonly string[]>([]);
 
   yield* Stream.runForEach(eventsStream, (event) =>
     Effect.gen(function* () {
-      eventCount++;
+      const count = yield* Ref.updateAndGet(countRef, (n) => n + 1);
       if (event.id) {
-        processedIds.push(event.id);
+        yield* Ref.update(idsRef, (ids) => [...ids, event.id!]);
       }
-
-      // Log progress at intervals
-      if (eventCount === 1 || eventCount % 10 === 0) {
-        yield* Effect.logInfo(`Processed event #${eventCount}:`, {
-          eventId: event.id,
-          eventType: event.type,
-        });
+      if (count === 1 || count % 10 === 0) {
+        yield* Effect.log(`Processed event #${count}: ID=${event.id}, Type=${event.type}`);
       }
     })
   );
 
-  const summary = {
-    totalCount: eventCount,
-    strategy: 'Stream processing (one at a time)',
-    memoryNote: 'Only one event held in memory at a time',
-    firstThreeIds: processedIds.slice(0, 3),
-  };
-  yield* Effect.logInfo('✅ Finished processing events sequentially:', summary);
-  // eslint-disable-next-line no-console
-  console.log(JSON.stringify(summary, null, 2));
+  const totalCount = yield* Ref.get(countRef);
+  const processedIds = yield* Ref.get(idsRef);
+
+  yield* Effect.log(`Finished processing ${totalCount} events sequentially`);
+  yield* Effect.log(`First 3 IDs: ${processedIds.slice(0, 3).join(', ')}`);
 }).pipe(
   Effect.provide(EdlinkClientLive),
   Effect.provide(FetchHttpClient.layer),

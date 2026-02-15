@@ -24,27 +24,18 @@ export default Effect.gen(function* () {
 
   const edlinkClient = yield* EdlinkClient;
 
-  // Get stream of events (default: max 3 pages)
-  const eventsStream = edlinkClient.getEventsStream();
-
-  // Collect events from the stream into a chunk (bounded to avoid hangs during debugging)
-  const eventsChunk = yield* Stream.runCollect(eventsStream.pipe(Stream.take(500)));
+  const eventsChunk = yield* edlinkClient
+    .getEventsStream()
+    .pipe(Stream.take(500), Stream.runCollect);
   const events = Chunk.toArray(eventsChunk);
 
-  const summary = {
-    totalCount: events.length,
-    firstEvent: events.length > 0 ? events[0] : null,
-  };
-  yield* Effect.logInfo('✅ Events fetched with default pagination (3 pages max):', summary);
-  // Always print a JSON summary to the console for easy visibility
-  // eslint-disable-next-line no-console
-  console.log(JSON.stringify(summary, null, 2));
+  yield* Effect.log(`Fetched ${events.length} events (default pagination, 3 pages max)`);
 
   if (events.length > 0) {
-    yield* Effect.logInfo('📌 Sample events:');
-    events.slice(0, 3).forEach((event, idx) => {
-      console.log(`  ${idx + 1}. ID: ${event.id}, Type: ${event.type}`);
-    });
+    yield* Effect.log('Sample events:');
+    yield* Effect.forEach(events.slice(0, 3), (event, idx) =>
+      Effect.log(`  ${idx + 1}. ID: ${event.id}, Type: ${event.type}`)
+    );
   }
 }).pipe(
   // Provide the required service layers

@@ -16,31 +16,21 @@ import { EdlinkClient, EdlinkClientLive } from '../../src/services/edlink-client
  */
 export default Effect.gen(function* () {
   yield* Effect.logInfo('📖 Example 2: Fetch ALL Available Events');
-  yield* Effect.logInfo('⚠️  This may take time if there are many events...');
+  yield* Effect.logWarning('⚠️  This may take time if there are many events...');
 
   const edlinkClient = yield* EdlinkClient;
-
-  // Get stream of events with no limit
-  const eventsStream = edlinkClient.getEventsStream({ type: 'all' });
-
-  // Collect all events and convert to array
-  const eventsChunk = yield* Stream.runCollect(eventsStream);
+  const eventsChunk = yield* edlinkClient
+    .getEventsStream({ type: 'all' })
+    .pipe(Stream.runCollect);
   const events = Chunk.toArray(eventsChunk);
 
-  const summary = {
-    totalCount: events.length,
-    strategy: 'Fetch everything',
-    memoryNote: 'All pages loaded into memory',
-  };
-  yield* Effect.logInfo('✅ All available events fetched:', summary);
-  // eslint-disable-next-line no-console
-  console.log(JSON.stringify(summary, null, 2));
+  yield* Effect.log(`Fetched all ${events.length} events (loaded into memory)`);
 
   if (events.length > 0) {
-    yield* Effect.logInfo('📌 Sample events (first 3):');
-    events.slice(0, 3).forEach((event, idx) => {
-      console.log(`  ${idx + 1}. ID: ${event.id}, Type: ${event.type}`);
-    });
+    yield* Effect.log('Sample events (first 3):');
+    yield* Effect.forEach(events.slice(0, 3), (event, idx) =>
+      Effect.log(`  ${idx + 1}. ID: ${event.id}, Type: ${event.type}`)
+    );
   }
 }).pipe(
   Effect.provide(EdlinkClientLive),

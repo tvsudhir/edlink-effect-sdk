@@ -1,53 +1,39 @@
 /**
- * Configuration options for paginating through Edlink API results
- * 
- * This module defines and re-exports pagination types and strategies from their dedicated submodules:
- * - pages.ts: PaginateByPages type + byPagesStrategy
- * - records.ts: PaginateByRecords type + byRecordsStrategy
- * - all.ts: PaginateAll type + allStrategy
+ * Pagination configuration types for Edlink API Stream operations
+ *
+ * Uses a discriminated union on the `type` field for exhaustive pattern matching.
  */
 
-export { 
-  type PaginateByPages,
-  isPaginateByPages,
-  byPagesStrategy,
-} from './pagination/pages.js';
+/** Limit pagination to a specific number of pages */
+export interface PaginateByPages {
+  readonly type: 'pages';
+  readonly maxPages: number;
+}
 
-export { 
-  type PaginateByRecords,
-  isPaginateByRecords,
-  byRecordsStrategy,
-} from './pagination/records.js';
+/** Limit pagination to a specific number of records (may stop mid-page) */
+export interface PaginateByRecords {
+  readonly type: 'records';
+  readonly maxRecords: number;
+}
 
-export { 
-  type PaginateAll,
-  isPaginateAll,
-  allStrategy,
-} from './pagination/all.js';
-
-/**
- * Re-import types for the union definition below
- */
-import type { PaginateByPages } from './pagination/pages.js';
-import type { PaginateByRecords } from './pagination/records.js';
-import type { PaginateAll } from './pagination/all.js';
+/** Fetch all available records with no limit */
+export interface PaginateAll {
+  readonly type: 'all';
+}
 
 /**
- * Pagination configuration for Stream operations
+ * Pagination configuration — discriminated union
  *
  * @example
  * // Fetch max 3 pages (default)
  * const config: PaginationConfig = { type: 'pages', maxPages: 3 };
  *
  * @example
- * // Fetch max 1000 records
- * const config: PaginationConfig = { type: 'records', maxRecords: 1000 };
+ * // Fetch max 500 records
+ * const config: PaginationConfig = { type: 'records', maxRecords: 500 };
  *
  * @example
- * // Fetch all available records
+ * // Fetch everything
  * const config: PaginationConfig = { type: 'all' };
  */
-export type PaginationConfig = 
-  | PaginateByPages
-  | PaginateByRecords
-  | PaginateAll;
+export type PaginationConfig = PaginateByPages | PaginateByRecords | PaginateAll;
